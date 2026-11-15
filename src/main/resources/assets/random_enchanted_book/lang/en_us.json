@@ -4,5 +4,6 @@
   "item.random_enchanted_book.random_enchanted_book_rare": "Rare Enchanted Book",
   "item.random_enchanted_book.random_enchanted_book_epic": "Epic Enchanted Book",
   "itemGroup.random_enchanted_book.random_enchanted_books": "Random Enchanted Books",
+  "jei.random_enchanted_book.possible_enchantments": "Possible Enchantments",
   "message.random_enchanted_book.empty_pool": "No enchantments match this book's configured pool."
 }

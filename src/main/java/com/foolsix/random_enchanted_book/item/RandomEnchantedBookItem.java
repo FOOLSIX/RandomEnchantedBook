@@ -5,6 +5,7 @@ import java.util.List;
 import com.foolsix.random_enchanted_book.RandomEnchantedBook;
 import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -29,6 +30,12 @@ public class RandomEnchantedBookItem extends Item {
         this.poolConfig = poolConfig;
     }
 
+    public List<Holder.Reference<Enchantment>> getEnchantmentPool(RegistryAccess registries) {
+        return registries.registryOrThrow(Registries.ENCHANTMENT).holders()
+                .filter(poolConfig.predicate())
+                .toList();
+    }
+
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack heldStack = player.getItemInHand(hand);
@@ -36,10 +43,7 @@ public class RandomEnchantedBookItem extends Item {
             return InteractionResultHolder.success(heldStack);
         }
 
-        List<Holder.Reference<Enchantment>> pool = level.registryAccess().registryOrThrow(Registries.ENCHANTMENT)
-                .holders()
-                .filter(poolConfig.predicate())
-                .toList();
+        List<Holder.Reference<Enchantment>> pool = getEnchantmentPool(level.registryAccess());
         if (pool.isEmpty()) {
             player.displayClientMessage(Component.translatable("message." + RandomEnchantedBook.MODID + ".empty_pool"), true);
             return InteractionResultHolder.fail(heldStack);

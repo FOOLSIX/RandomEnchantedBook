@@ -4,5 +4,6 @@
   "item.random_enchanted_book.random_enchanted_book_rare": "稀有附魔书",
   "item.random_enchanted_book.random_enchanted_book_epic": "史诗附魔书",
   "itemGroup.random_enchanted_book.random_enchanted_books": "随机附魔书",
+  "jei.random_enchanted_book.possible_enchantments": "可能的附魔",
   "message.random_enchanted_book.empty_pool": "没有附魔符合这本书的抽取条件。"
 }

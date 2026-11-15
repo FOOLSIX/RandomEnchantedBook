@@ -21,7 +21,6 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.neoforged.fml.config.IConfigSpec;
 import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class EnchantmentPoolConfig {
@@ -87,14 +86,11 @@ public final class EnchantmentPoolConfig {
                 .define(name, "any", value -> TagMatch.parse(value) != null);
     }
 
-    public static void onConfigChanged(ModConfigEvent event) {
-        if (event.getConfig().getSpec() == SPEC
-                && (event instanceof ModConfigEvent.Loading || event instanceof ModConfigEvent.Reloading)) {
-            COMMON.compilePredicate();
-            UNCOMMON.compilePredicate();
-            RARE.compilePredicate();
-            EPIC.compilePredicate();
-        }
+    public static void compilePredicates() {
+        COMMON.compilePredicate();
+        UNCOMMON.compilePredicate();
+        RARE.compilePredicate();
+        EPIC.compilePredicate();
     }
 
     public Predicate<Holder.Reference<Enchantment>> predicate() {

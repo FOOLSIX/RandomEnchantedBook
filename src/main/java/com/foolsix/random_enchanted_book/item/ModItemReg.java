@@ -1,5 +1,7 @@
 package com.foolsix.random_enchanted_book.item;
 
+import java.util.List;
+
 import com.foolsix.random_enchanted_book.RandomEnchantedBook;
 import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
 import net.minecraft.core.registries.Registries;
@@ -28,16 +30,14 @@ public final class ModItemReg {
             ITEMS.register("random_enchanted_book_epic",
                     () -> new RandomEnchantedBookItem(Rarity.EPIC, EnchantmentPoolConfig.EPIC));
 
+    public static final List<DeferredItem<RandomEnchantedBookItem>> BOOKS =
+            List.of(COMMON_BOOK, UNCOMMON_BOOK, RARE_BOOK, EPIC_BOOK);
+
     static {
         CREATIVE_MODE_TABS.register("random_enchanted_books", () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup." + RandomEnchantedBook.MODID + ".random_enchanted_books"))
                 .icon(() -> COMMON_BOOK.get().getDefaultInstance())
-                .displayItems((parameters, output) -> {
-                    output.accept(COMMON_BOOK.get());
-                    output.accept(UNCOMMON_BOOK.get());
-                    output.accept(RARE_BOOK.get());
-                    output.accept(EPIC_BOOK.get());
-                })
+                .displayItems((parameters, output) -> BOOKS.forEach(book -> output.accept(book.get())))
                 .build());
     }
 
