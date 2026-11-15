@@ -19,6 +19,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.Connection;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -43,17 +44,20 @@ public final class RandomEnchantedBookJeiPlugin implements IModPlugin {
         registration.addTypedRecipeManagerPlugin(EnchantmentPoolJeiCategory.RECIPE_TYPE, new PoolLookup());
     }
 
-    private static Stream<EnchantmentPoolJeiRecipe.Pool> pools(DeferredItem<RandomEnchantedBookItem> book) {
-        ClientPacketListener connection = Minecraft.getInstance().getConnection();
-        if (connection == null) {
+    private static Stream<EnchantmentPoolJeiRecipe.Pool> loadPools(
+            Stream<DeferredItem<RandomEnchantedBookItem>> books) {
+        ClientPacketListener listener = Minecraft.getInstance().getConnection();
+        if (listener == null) {
             return Stream.empty();
         }
 
-        Registry<Enchantment> enchantments = connection.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
-        return BookPoolSync.getClientPool(connection.getConnection(), book.getId()).stream()
-                .map(pool -> new EnchantmentPoolJeiRecipe.Pool(book.get(), pool.stream()
+        Registry<Enchantment> enchantments = listener.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
+        Connection connection = listener.getConnection();
+        return books.flatMap(book -> BookPoolSync.getClientPool(connection, book.getId())
+                .map(ids -> new EnchantmentPoolJeiRecipe.Pool(book.get(), ids.stream()
                         .flatMap(id -> enchantments.getHolder(id).stream())
-                        .toList()));
+                        .toList()))
+                .stream());
     }
 
     private static final class PoolLookup implements ISimpleRecipeManagerPlugin<EnchantmentPoolJeiRecipe> {
@@ -71,9 +75,8 @@ public final class RandomEnchantedBookJeiPlugin implements IModPlugin {
         @Override
         public List<EnchantmentPoolJeiRecipe> getRecipesForInput(ITypedIngredient<?> ingredient) {
             return ingredient.getItemStack().stream()
-                    .<EnchantmentPoolJeiRecipe>flatMap(stack -> ModItemReg.BOOKS.stream()
-                            .filter(book -> stack.is(book.get()))
-                            .flatMap(RandomEnchantedBookJeiPlugin::pools))
+                    .<EnchantmentPoolJeiRecipe>flatMap(stack -> loadPools(ModItemReg.BOOKS.stream()
+                            .filter(book -> stack.is(book.get()))))
                     .toList();
         }
 
@@ -91,25 +94,28 @@ public final class RandomEnchantedBookJeiPlugin implements IModPlugin {
                 return List.of();
             }
 
-            List<Item> books = ModItemReg.BOOKS.stream()
-                    .flatMap(RandomEnchantedBookJeiPlugin::pools)
+            List<Item> books = findSourceBooks(enchantment);
+            return books.isEmpty() ? List.of() : List.of(new EnchantmentPoolJeiRecipe.Sources(enchantment, level, books));
+        }
+
+        private static List<Item> findSourceBooks(Holder<Enchantment> enchantment) {
+            return loadPools(ModItemReg.BOOKS.stream())
                     .filter(pool -> pool.enchantments().contains(enchantment))
                     .map(EnchantmentPoolJeiRecipe.Pool::input)
                     .distinct()
                     .toList();
-            return books.isEmpty() ? List.of() : List.of(new EnchantmentPoolJeiRecipe.Sources(enchantment, level, books));
         }
 
         private static Optional<ItemEnchantments> getOutputEnchantments(ITypedIngredient<?> ingredient) {
             return ingredient.getItemStack().filter(stack -> stack.is(Items.ENCHANTED_BOOK))
                     .map(stack -> stack.getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY))
-                    .filter(enchantments -> enchantments.keySet().size() == 1);
+                    .filter(enchantments -> enchantments.size() == 1);
         }
 
         @Override
         public List<EnchantmentPoolJeiRecipe> getAllRecipes() {
-            return ModItemReg.BOOKS.stream()
-                    .<EnchantmentPoolJeiRecipe>flatMap(RandomEnchantedBookJeiPlugin::pools)
+            return loadPools(ModItemReg.BOOKS.stream())
+                    .<EnchantmentPoolJeiRecipe>map(pool -> pool)
                     .toList();
         }
     }

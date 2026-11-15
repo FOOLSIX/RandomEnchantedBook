@@ -49,7 +49,11 @@ public final class BookPoolSync {
             return;
         }
 
-        RegistryAccess registries = server.registryAccess();
+        Snapshot snapshot = createSnapshot(server.registryAccess());
+        recipients.forEach(player -> PacketDistributor.sendToPlayer(player, snapshot));
+    }
+
+    private static Snapshot createSnapshot(RegistryAccess registries) {
         Map<ResourceLocation, List<ResourceLocation>> pools = new LinkedHashMap<>();
         for (var book : ModItemReg.BOOKS) {
             List<ResourceLocation> enchantments = book.get().getEnchantmentPool(registries).stream()
@@ -58,8 +62,7 @@ public final class BookPoolSync {
                     .toList();
             pools.put(book.getId(), enchantments);
         }
-        Snapshot snapshot = new Snapshot(pools);
-        recipients.forEach(player -> PacketDistributor.sendToPlayer(player, snapshot));
+        return new Snapshot(pools);
     }
 
     private static void receive(Snapshot snapshot, IPayloadContext context) {

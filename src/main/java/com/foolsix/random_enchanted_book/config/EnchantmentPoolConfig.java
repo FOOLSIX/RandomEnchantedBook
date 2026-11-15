@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import javax.annotation.Nullable;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -66,16 +67,7 @@ public final class EnchantmentPoolConfig {
         weights = builder.comment("Allowed enchantment weights (1–1024). An empty list accepts any weight.")
                 .defineListAllowEmpty("weights", List.of(defaultWeight), () -> defaultWeight,
                         value -> value instanceof Integer weight && weight >= 1 && weight <= 1024);
-        tagOptions = Map.of(
-                EnchantmentTags.CURSE, tagOption(builder, "curse", "Is a curse.", false),
-                EnchantmentTags.TREASURE, tagOption(builder, "treasure", "Is a treasure enchantment."),
-                EnchantmentTags.TRADEABLE, tagOption(builder, "tradeable", "Can be sold as a book by villagers."),
-                EnchantmentTags.IN_ENCHANTING_TABLE, tagOption(builder, "discoverable", "Can appear at the enchanting table."),
-                EnchantmentTags.ON_RANDOM_LOOT, tagOption(builder, "randomLoot", "Can appear in random loot.", true),
-                EnchantmentTags.ON_TRADED_EQUIPMENT, tagOption(builder, "tradedEquipment", "Can be on equipment sold by villagers."),
-                EnchantmentTags.ON_MOB_SPAWN_EQUIPMENT, tagOption(builder, "mobSpawnEquipment", "Can be on equipment worn by spawned mobs."),
-                EnchantmentTags.DOUBLE_TRADE_PRICE, tagOption(builder, "doubleTradePrice", "Doubles the enchantment's book trade price.")
-        );
+        tagOptions = defineTagOptions(builder);
         requiredTags = builder.comment("Requires every listed tag (AND), in addition to allow. Tag names can start with #.")
                 .defineListAllowEmpty("requiredTags", List.of(), () -> "#minecraft:in_enchanting_table",
                         EnchantmentPoolConfig::isSelector);
@@ -92,6 +84,19 @@ public final class EnchantmentPoolConfig {
         builder.pop();
         predicate = enchantment -> enchantment.value().getWeight() == defaultWeight
                 && enchantment.is(EnchantmentTags.ON_RANDOM_LOOT);
+    }
+
+    private static Map<TagKey<Enchantment>, ModConfigSpec.ConfigValue<Object>> defineTagOptions(ModConfigSpec.Builder builder) {
+        return Map.of(
+                EnchantmentTags.CURSE, tagOption(builder, "curse", "Is a curse.", false),
+                EnchantmentTags.TREASURE, tagOption(builder, "treasure", "Is a treasure enchantment."),
+                EnchantmentTags.TRADEABLE, tagOption(builder, "tradeable", "Can be sold as a book by villagers."),
+                EnchantmentTags.IN_ENCHANTING_TABLE, tagOption(builder, "discoverable", "Can appear at the enchanting table."),
+                EnchantmentTags.ON_RANDOM_LOOT, tagOption(builder, "randomLoot", "Can appear in random loot.", true),
+                EnchantmentTags.ON_TRADED_EQUIPMENT, tagOption(builder, "tradedEquipment", "Can be on equipment sold by villagers."),
+                EnchantmentTags.ON_MOB_SPAWN_EQUIPMENT, tagOption(builder, "mobSpawnEquipment", "Can be on equipment worn by spawned mobs."),
+                EnchantmentTags.DOUBLE_TRADE_PRICE, tagOption(builder, "doubleTradePrice", "Doubles the enchantment's book trade price.")
+        );
     }
 
     private static ModConfigSpec.ConfigValue<Object> tagOption(ModConfigSpec.Builder builder, String name, String comment) {
@@ -123,15 +128,7 @@ public final class EnchantmentPoolConfig {
 
     private void compilePredicate() {
         Set<Integer> allowedWeights = Set.copyOf(weights.get());
-        Set<TagKey<Enchantment>> required = parseTags(requiredTags.get());
-        Set<TagKey<Enchantment>> excluded = new HashSet<>();
-        tagOptions.forEach((tag, option) -> {
-            switch (TagMatch.parse(option.get())) {
-                case PRESENT -> required.add(tag);
-                case ABSENT -> excluded.add(tag);
-                case ANY -> {}
-            }
-        });
+        var tagFilter = compileTagFilter();
         int minLevelCap = minMaxLevel.get();
         int maxLevelCap = maxMaxLevel.get();
         var allowed = matchSelectors(allow.get(), true);
@@ -142,28 +139,50 @@ public final class EnchantmentPoolConfig {
             return (allowedWeights.isEmpty() || allowedWeights.contains(value.getWeight()))
                     && value.getMaxLevel() >= minLevelCap
                     && value.getMaxLevel() <= maxLevelCap
-                    && (required.isEmpty() || required.stream().allMatch(enchantment::is))
-                    && (excluded.isEmpty() || excluded.stream().noneMatch(enchantment::is))
+                    && tagFilter.test(enchantment)
                     && allowed.test(enchantment)
                     && !denied.test(enchantment);
         };
     }
 
-    private static Set<TagKey<Enchantment>> parseTags(List<? extends String> names) {
-        Set<TagKey<Enchantment>> tags = new HashSet<>();
-        for (String name : names) {
-            String id = name.startsWith("#") ? name.substring(1) : name;
-            tags.add(TagKey.create(Registries.ENCHANTMENT, ResourceLocation.parse(id)));
+    private Predicate<Holder.Reference<Enchantment>> compileTagFilter() {
+        Set<TagKey<Enchantment>> required = new HashSet<>();
+        for (String selector : requiredTags.get()) {
+            required.add(TagKey.create(Registries.ENCHANTMENT, ResourceLocation.parse(withoutTagPrefix(selector))));
         }
-        return tags;
+        Set<TagKey<Enchantment>> excluded = new HashSet<>();
+        tagOptions.forEach((tag, option) -> {
+            switch (TagMatch.parse(option.get())) {
+                case PRESENT -> required.add(tag);
+                case ABSENT -> excluded.add(tag);
+                case ANY -> {}
+            }
+        });
+        return enchantment -> matchesTags(enchantment, required, true) && matchesTags(enchantment, excluded, false);
+    }
+
+    private static boolean matchesTags(Holder.Reference<Enchantment> enchantment, Set<TagKey<Enchantment>> tags,
+                                       boolean expected) {
+        for (TagKey<Enchantment> tag : tags) {
+            if (enchantment.is(tag) != expected) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isSelector(Object value) {
-        if (!(value instanceof String selector)) {
-            return false;
-        }
-        ResourceLocation id = ResourceLocation.tryParse(selector.startsWith("#") ? selector.substring(1) : selector);
-        return id != null && !id.getPath().isEmpty();
+        return value instanceof String selector && parseValidSelectorId(selector) != null;
+    }
+
+    @Nullable
+    private static ResourceLocation parseValidSelectorId(String selector) {
+        ResourceLocation id = ResourceLocation.tryParse(withoutTagPrefix(selector));
+        return id == null || id.getPath().isEmpty() ? null : id;
+    }
+
+    private static String withoutTagPrefix(String selector) {
+        return selector.startsWith("#") ? selector.substring(1) : selector;
     }
 
     private static Predicate<Holder.Reference<Enchantment>> matchSelectors(List<? extends String> selectors,
@@ -174,10 +193,11 @@ public final class EnchantmentPoolConfig {
         Set<ResourceLocation> ids = new HashSet<>();
         List<TagKey<Enchantment>> tags = new ArrayList<>();
         for (String selector : selectors) {
+            ResourceLocation id = ResourceLocation.parse(withoutTagPrefix(selector));
             if (selector.startsWith("#")) {
-                tags.add(TagKey.create(Registries.ENCHANTMENT, ResourceLocation.parse(selector.substring(1))));
+                tags.add(TagKey.create(Registries.ENCHANTMENT, id));
             } else {
-                ids.add(ResourceLocation.parse(selector));
+                ids.add(id);
             }
         }
         return enchantment -> {
@@ -246,9 +266,12 @@ public final class EnchantmentPoolConfig {
 
         private static void addSelectors(Map<String, String> merged, List<?> entries, boolean forceTag) {
             for (Object entry : entries) {
-                if (entry instanceof String selector && isSelector(selector)) {
+                if (!(entry instanceof String selector)) {
+                    continue;
+                }
+                ResourceLocation id = parseValidSelectorId(selector);
+                if (id != null) {
                     boolean tag = selector.startsWith("#");
-                    ResourceLocation id = ResourceLocation.parse(tag ? selector.substring(1) : selector);
                     String canonical = (tag || forceTag ? "#" : "") + id;
                     merged.putIfAbsent(canonical, forceTag ? canonical : selector);
                 }

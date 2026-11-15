@@ -31,21 +31,7 @@ final class ChestBookLootModifier extends LootModifier {
     @Override
     protected ObjectArrayList<ItemStack> doApply(ObjectArrayList<ItemStack> loot, LootContext context) {
         var settings = EnchantmentPoolConfig.CHEST_BOOKS.settings();
-        if (settings.chance() <= 0.0) {
-            return loot;
-        }
-
-        ResourceLocation tableId = context.getQueriedLootTableId();
-        String path = tableId.getPath();
-        // Vanilla uses the chest loot type for dispensers, pots, trial spawners and vault rewards too.
-        if (!path.startsWith("chests/") || (tableId.getNamespace().equals(ResourceLocation.DEFAULT_NAMESPACE)
-                && path.startsWith("chests/trial_chambers/reward"))) {
-            return loot;
-        }
-
-        var tableKey = ResourceKey.create(Registries.LOOT_TABLE, tableId);
-        LootTable table = context.getLevel().getServer().reloadableRegistries().getLootTable(tableKey);
-        if (table.getParamSet() != LootContextParamSets.CHEST) {
+        if (settings.chance() <= 0.0 || !isChestLoot(context)) {
             return loot;
         }
 
@@ -54,5 +40,19 @@ final class ChestBookLootModifier extends LootModifier {
             settings.books().getRandom(random).ifPresent(book -> loot.add(new ItemStack(book.data())));
         }
         return loot;
+    }
+
+    private static boolean isChestLoot(LootContext context) {
+        ResourceLocation tableId = context.getQueriedLootTableId();
+        String path = tableId.getPath();
+        // Vanilla uses the chest loot type for dispensers, pots, trial spawners and vault rewards too.
+        if (!path.startsWith("chests/") || (tableId.getNamespace().equals(ResourceLocation.DEFAULT_NAMESPACE)
+                && path.startsWith("chests/trial_chambers/reward"))) {
+            return false;
+        }
+
+        var tableKey = ResourceKey.create(Registries.LOOT_TABLE, tableId);
+        LootTable table = context.getLevel().getServer().reloadableRegistries().getLootTable(tableKey);
+        return table.getParamSet() == LootContextParamSets.CHEST;
     }
 }

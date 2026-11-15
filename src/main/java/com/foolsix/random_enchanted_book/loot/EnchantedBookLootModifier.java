@@ -3,6 +3,7 @@ package com.foolsix.random_enchanted_book.loot;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import javax.annotation.Nullable;
 
 import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
 import com.foolsix.random_enchanted_book.item.ModItemReg;
@@ -55,11 +56,12 @@ public final class EnchantedBookLootModifier extends LootModifier {
         }
 
         // Compact the original loot in place, leaving the newly appended stacks after it.
+        RandomSource random = context.getRandom();
         int originalSize = loot.size();
         int kept = 0;
         for (int index = 0; index < originalSize; index++) {
             ItemStack original = loot.get(index);
-            ItemStack remaining = replaceBook(original, chance, context, loot);
+            ItemStack remaining = replaceBook(original, chance, random, loot);
             if (remaining == ItemStack.EMPTY && remaining != original) {
                 continue;
             }
@@ -74,7 +76,7 @@ public final class EnchantedBookLootModifier extends LootModifier {
         return loot;
     }
 
-    private static ItemStack replaceBook(ItemStack original, double chance, LootContext context,
+    private static ItemStack replaceBook(ItemStack original, double chance, RandomSource random,
                                          ObjectArrayList<ItemStack> loot) {
         if (!original.is(Items.ENCHANTED_BOOK) || original.isEmpty()) {
             return original;
@@ -84,11 +86,18 @@ public final class EnchantedBookLootModifier extends LootModifier {
             return original;
         }
 
-        int selected = countSelectedBooks(original.getCount(), chance, context.getRandom());
+        int selected = countSelectedBooks(original.getCount(), chance, random);
         if (selected == 0) {
             return original;
         }
 
+        ItemEnchantments.Mutable unmatched = replaceMatchingEnchantments(stored, selected, loot);
+        return unmatched == null ? original : keepRemainingBooks(original, selected, unmatched, loot);
+    }
+
+    @Nullable
+    private static ItemEnchantments.Mutable replaceMatchingEnchantments(ItemEnchantments stored, int selected,
+                                                                         ObjectArrayList<ItemStack> loot) {
         var matchingBooks = matches;
         ItemEnchantments.Mutable unmatched = null;
         for (Holder<Enchantment> enchantment : stored.keySet()) {
@@ -104,15 +113,21 @@ public final class EnchantedBookLootModifier extends LootModifier {
                 unmatched = new ItemEnchantments.Mutable(stored);
             }
             unmatched.set(enchantment, 0);
-            int maxStackSize = book.getDefaultMaxStackSize();
-            for (int remaining = selected; remaining > 0; remaining -= maxStackSize) {
-                loot.add(new ItemStack(book, Math.min(remaining, maxStackSize)));
-            }
+            appendReplacementBooks(loot, book, selected);
         }
-        if (unmatched == null) {
-            return original;
-        }
+        return unmatched;
+    }
 
+    private static void appendReplacementBooks(ObjectArrayList<ItemStack> loot, RandomEnchantedBookItem book,
+                                               int count) {
+        int maxStackSize = book.getDefaultMaxStackSize();
+        for (int remaining = count; remaining > 0; remaining -= maxStackSize) {
+            loot.add(new ItemStack(book, Math.min(remaining, maxStackSize)));
+        }
+    }
+
+    private static ItemStack keepRemainingBooks(ItemStack original, int selected, ItemEnchantments.Mutable unmatched,
+                                                ObjectArrayList<ItemStack> loot) {
         int untouched = original.getCount() - selected;
         if (!unmatched.keySet().isEmpty()) {
             ItemStack partial = original.copyWithCount(selected);
