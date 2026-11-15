@@ -1,0 +1,257 @@
+package com.foolsix.random_enchanted_book.config;
+
+import com.electronwill.nightconfig.core.CommentedConfig;
+import com.electronwill.nightconfig.core.Config;
+import com.electronwill.nightconfig.core.UnmodifiableCommentedConfig;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Predicate;
+
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.neoforged.fml.config.IConfigSpec;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.neoforge.common.ModConfigSpec;
+
+public final class EnchantmentPoolConfig {
+    public static final EnchantmentPoolConfig COMMON;
+    public static final EnchantmentPoolConfig UNCOMMON;
+    public static final EnchantmentPoolConfig RARE;
+    public static final EnchantmentPoolConfig EPIC;
+    public static final IConfigSpec SPEC;
+
+    static {
+        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        // The four weights defined by vanilla 1.21.1 enchantments.
+        COMMON = new EnchantmentPoolConfig(builder, "common", 10);
+        UNCOMMON = new EnchantmentPoolConfig(builder, "uncommon", 5);
+        RARE = new EnchantmentPoolConfig(builder, "rare", 2);
+        EPIC = new EnchantmentPoolConfig(builder, "epic", 1);
+        SPEC = new PoolConfigSpec(builder.build());
+    }
+
+    private final ModConfigSpec.ConfigValue<List<? extends Integer>> weights;
+    private final Map<TagKey<Enchantment>, ModConfigSpec.ConfigValue<Object>> tagOptions;
+    private final ModConfigSpec.ConfigValue<List<? extends String>> requiredTags;
+    private final ModConfigSpec.IntValue minMaxLevel;
+    private final ModConfigSpec.IntValue maxMaxLevel;
+    private final ModConfigSpec.ConfigValue<List<? extends String>> allow;
+    private final ModConfigSpec.ConfigValue<List<? extends String>> deny;
+    private volatile Predicate<Holder.Reference<Enchantment>> predicate;
+
+    private EnchantmentPoolConfig(ModConfigSpec.Builder builder, String section, int defaultWeight) {
+        builder.comment("All conditions in this section must match an enchantment.").push(section);
+        weights = builder.comment("Allowed enchantment weights (1–1024). An empty list accepts any weight.")
+                .defineListAllowEmpty("weights", List.of(defaultWeight), () -> defaultWeight,
+                        value -> value instanceof Integer weight && weight >= 1 && weight <= 1024);
+        tagOptions = Map.of(
+                EnchantmentTags.CURSE, tagOption(builder, "curse", "Is a curse."),
+                EnchantmentTags.TREASURE, tagOption(builder, "treasure", "Is a treasure enchantment."),
+                EnchantmentTags.TRADEABLE, tagOption(builder, "tradeable", "Can be sold as a book by villagers."),
+                EnchantmentTags.IN_ENCHANTING_TABLE, tagOption(builder, "discoverable", "Can appear at the enchanting table."),
+                EnchantmentTags.ON_RANDOM_LOOT, tagOption(builder, "randomLoot", "Can appear in random loot."),
+                EnchantmentTags.ON_TRADED_EQUIPMENT, tagOption(builder, "tradedEquipment", "Can be on equipment sold by villagers."),
+                EnchantmentTags.ON_MOB_SPAWN_EQUIPMENT, tagOption(builder, "mobSpawnEquipment", "Can be on equipment worn by spawned mobs."),
+                EnchantmentTags.DOUBLE_TRADE_PRICE, tagOption(builder, "doubleTradePrice", "Doubles the enchantment's book trade price.")
+        );
+        requiredTags = builder.comment("Requires every listed tag (AND), in addition to allow. Tag names can start with #.")
+                .defineListAllowEmpty("requiredTags", List.of(), () -> "#minecraft:in_enchanting_table",
+                        EnchantmentPoolConfig::isSelector);
+        minMaxLevel = builder.comment("Minimum accepted value of the enchantment's own maximum level.")
+                .defineInRange("minMaxLevel", 1, 1, Enchantment.MAX_LEVEL);
+        maxMaxLevel = builder.comment("Maximum accepted value of the enchantment's own maximum level.")
+                .defineInRange("maxMaxLevel", Enchantment.MAX_LEVEL, 1, Enchantment.MAX_LEVEL);
+        allow = builder.comment("Match any listed ID or #tag (OR). An empty list imposes no whitelist restriction.",
+                        "Example: [\"minecraft:mending\", \"#minecraft:in_enchanting_table\"]")
+                .defineListAllowEmpty("allow", List.of(), () -> "minecraft:mending", EnchantmentPoolConfig::isSelector);
+        deny = builder.comment("Reject any listed ID or #tag, even if it also matches allow.",
+                        "Example: [\"minecraft:mending\", \"#minecraft:curse\"]")
+                .defineListAllowEmpty("deny", List.of(), () -> "#minecraft:curse", EnchantmentPoolConfig::isSelector);
+        builder.pop();
+        predicate = enchantment -> enchantment.value().getWeight() == defaultWeight;
+    }
+
+    private static ModConfigSpec.ConfigValue<Object> tagOption(ModConfigSpec.Builder builder, String name, String comment) {
+        return builder.comment(comment, "Use \"any\" to ignore this tag, true to require it, or false to exclude it.")
+                .define(name, "any", value -> TagMatch.parse(value) != null);
+    }
+
+    public static void onConfigChanged(ModConfigEvent event) {
+        if (event.getConfig().getSpec() == SPEC
+                && (event instanceof ModConfigEvent.Loading || event instanceof ModConfigEvent.Reloading)) {
+            COMMON.compilePredicate();
+            UNCOMMON.compilePredicate();
+            RARE.compilePredicate();
+            EPIC.compilePredicate();
+        }
+    }
+
+    public Predicate<Holder.Reference<Enchantment>> predicate() {
+        return predicate;
+    }
+
+    private void compilePredicate() {
+        Set<Integer> allowedWeights = Set.copyOf(weights.get());
+        Set<TagKey<Enchantment>> required = parseTags(requiredTags.get());
+        Set<TagKey<Enchantment>> excluded = new HashSet<>();
+        tagOptions.forEach((tag, option) -> {
+            switch (TagMatch.parse(option.get())) {
+                case PRESENT -> required.add(tag);
+                case ABSENT -> excluded.add(tag);
+                case ANY -> {}
+            }
+        });
+        int minLevelCap = minMaxLevel.get();
+        int maxLevelCap = maxMaxLevel.get();
+        var allowed = matchSelectors(allow.get(), true);
+        var denied = matchSelectors(deny.get(), false);
+
+        predicate = enchantment -> {
+            Enchantment value = enchantment.value();
+            return (allowedWeights.isEmpty() || allowedWeights.contains(value.getWeight()))
+                    && value.getMaxLevel() >= minLevelCap
+                    && value.getMaxLevel() <= maxLevelCap
+                    && (required.isEmpty() || required.stream().allMatch(enchantment::is))
+                    && (excluded.isEmpty() || excluded.stream().noneMatch(enchantment::is))
+                    && allowed.test(enchantment)
+                    && !denied.test(enchantment);
+        };
+    }
+
+    private static Set<TagKey<Enchantment>> parseTags(List<? extends String> names) {
+        Set<TagKey<Enchantment>> tags = new HashSet<>();
+        for (String name : names) {
+            String id = name.startsWith("#") ? name.substring(1) : name;
+            tags.add(TagKey.create(Registries.ENCHANTMENT, ResourceLocation.parse(id)));
+        }
+        return tags;
+    }
+
+    private static boolean isSelector(Object value) {
+        if (!(value instanceof String selector)) {
+            return false;
+        }
+        ResourceLocation id = ResourceLocation.tryParse(selector.startsWith("#") ? selector.substring(1) : selector);
+        return id != null && !id.getPath().isEmpty();
+    }
+
+    private static Predicate<Holder.Reference<Enchantment>> matchSelectors(List<? extends String> selectors,
+                                                                          boolean matchWhenEmpty) {
+        if (selectors.isEmpty()) {
+            return enchantment -> matchWhenEmpty;
+        }
+        Set<ResourceLocation> ids = new HashSet<>();
+        List<TagKey<Enchantment>> tags = new ArrayList<>();
+        for (String selector : selectors) {
+            if (selector.startsWith("#")) {
+                tags.add(TagKey.create(Registries.ENCHANTMENT, ResourceLocation.parse(selector.substring(1))));
+            } else {
+                ids.add(ResourceLocation.parse(selector));
+            }
+        }
+        return enchantment -> {
+            if (ids.contains(enchantment.key().location())) {
+                return true;
+            }
+            for (TagKey<Enchantment> tag : tags) {
+                if (enchantment.is(tag)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
+
+    private static final class PoolConfigSpec implements IConfigSpec {
+        private final ModConfigSpec spec;
+
+        private PoolConfigSpec(ModConfigSpec spec) {
+            this.spec = spec;
+        }
+
+        @Override
+        public void acceptConfig(ILoadedConfig data) {
+            if (data != null) {
+                migrateExcludedTags(data.config());
+            }
+            spec.acceptConfig(data);
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return spec.isEmpty();
+        }
+
+        @Override
+        public void validateSpec(ModConfig config) {
+            spec.validateSpec(config);
+        }
+
+        @Override
+        public boolean isCorrect(UnmodifiableCommentedConfig data) {
+            return spec.isCorrect(data);
+        }
+
+        @Override
+        public void correct(CommentedConfig data) {
+            migrateExcludedTags(data);
+            spec.correct(data);
+        }
+
+        private static void migrateExcludedTags(CommentedConfig data) {
+            // Merge legacy tags before NeoForge removes keys outside the current spec.
+            for (String section : List.of("common", "uncommon", "rare", "epic")) {
+                if (data.get(section) instanceof Config pool
+                        && pool.get("excludedTags") instanceof List<?> tags && !tags.isEmpty()) {
+                    Map<String, String> merged = new LinkedHashMap<>();
+                    if (pool.get("deny") instanceof List<?> existing) {
+                        addSelectors(merged, existing, false);
+                    }
+                    addSelectors(merged, tags, true);
+                    pool.set("deny", new ArrayList<>(merged.values()));
+                }
+            }
+        }
+
+        private static void addSelectors(Map<String, String> merged, List<?> entries, boolean forceTag) {
+            for (Object entry : entries) {
+                if (entry instanceof String selector && isSelector(selector)) {
+                    boolean tag = selector.startsWith("#");
+                    ResourceLocation id = ResourceLocation.parse(tag ? selector.substring(1) : selector);
+                    String canonical = (tag || forceTag ? "#" : "") + id;
+                    merged.putIfAbsent(canonical, forceTag ? canonical : selector);
+                }
+            }
+        }
+    }
+
+    private enum TagMatch {
+        ANY, PRESENT, ABSENT;
+
+        static TagMatch parse(Object value) {
+            if (value instanceof Boolean present) {
+                return present ? PRESENT : ABSENT;
+            }
+            if (value instanceof String text) {
+                return switch (text.toLowerCase(Locale.ROOT)) {
+                    case "any" -> ANY;
+                    case "true", "require" -> PRESENT;
+                    case "false", "exclude" -> ABSENT;
+                    default -> null;
+                };
+            }
+            return null;
+        }
+    }
+}

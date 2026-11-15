@@ -1,0 +1,8 @@
+{
+  "item.random_enchanted_book.random_enchanted_book_common": "Common Enchanted Book",
+  "item.random_enchanted_book.random_enchanted_book_uncommon": "Uncommon Enchanted Book",
+  "item.random_enchanted_book.random_enchanted_book_rare": "Rare Enchanted Book",
+  "item.random_enchanted_book.random_enchanted_book_epic": "Epic Enchanted Book",
+  "itemGroup.random_enchanted_book.random_enchanted_books": "Random Enchanted Books",
+  "message.random_enchanted_book.empty_pool": "No enchantments match this book's configured pool."
+}
