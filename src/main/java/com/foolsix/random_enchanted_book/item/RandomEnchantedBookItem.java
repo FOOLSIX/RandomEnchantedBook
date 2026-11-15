@@ -36,6 +36,10 @@ public class RandomEnchantedBookItem extends Item {
                 .toList();
     }
 
+    public boolean matchesEnchantment(Holder.Reference<Enchantment> enchantment) {
+        return poolConfig.predicate().test(enchantment);
+    }
+
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack heldStack = player.getItemInHand(hand);

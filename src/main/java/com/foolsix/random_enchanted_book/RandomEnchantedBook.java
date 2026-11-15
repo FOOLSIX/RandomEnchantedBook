@@ -2,6 +2,7 @@ package com.foolsix.random_enchanted_book;
 
 import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
 import com.foolsix.random_enchanted_book.item.ModItemReg;
+import com.foolsix.random_enchanted_book.loot.EnchantedBookLootModifier;
 import com.foolsix.random_enchanted_book.network.BookPoolSync;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -16,8 +17,10 @@ public class RandomEnchantedBook {
 
     public RandomEnchantedBook(IEventBus modEventBus, ModContainer modContainer) {
         ModItemReg.register(modEventBus);
+        EnchantedBookLootModifier.register(modEventBus);
         modEventBus.addListener(RandomEnchantedBook::onConfigChanged);
         modEventBus.addListener(BookPoolSync::registerPayloads);
+        NeoForge.EVENT_BUS.addListener(EnchantedBookLootModifier::onTagsUpdated);
         NeoForge.EVENT_BUS.addListener(BookPoolSync::onDatapackSync);
         modContainer.registerConfig(ModConfig.Type.COMMON, EnchantmentPoolConfig.SPEC);
     }
@@ -25,7 +28,8 @@ public class RandomEnchantedBook {
     private static void onConfigChanged(ModConfigEvent event) {
         if (event.getConfig().getSpec() == EnchantmentPoolConfig.SPEC
                 && (event instanceof ModConfigEvent.Loading || event instanceof ModConfigEvent.Reloading)) {
-            EnchantmentPoolConfig.compilePredicates();
+            EnchantmentPoolConfig.refresh();
+            EnchantedBookLootModifier.invalidateMatches();
             if (event instanceof ModConfigEvent.Reloading) {
                 BookPoolSync.onConfigReload();
             }
