@@ -4,7 +4,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import com.foolsix.random_enchanted_book.RandomEnchantedBook;
 import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
 import com.foolsix.random_enchanted_book.item.ModItemReg;
 import com.foolsix.random_enchanted_book.item.RandomEnchantedBookItem;
@@ -20,28 +19,17 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.common.loot.IGlobalLootModifier;
 import net.neoforged.neoforge.common.loot.LootModifier;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
 public final class EnchantedBookLootModifier extends LootModifier {
-    private static final MapCodec<EnchantedBookLootModifier> CODEC =
+    static final MapCodec<EnchantedBookLootModifier> CODEC =
             RecordCodecBuilder.mapCodec(instance -> codecStart(instance).apply(instance, EnchantedBookLootModifier::new));
     private static volatile ConcurrentMap<Holder.Reference<Enchantment>, Optional<RandomEnchantedBookItem>> matches =
             new ConcurrentHashMap<>();
 
     private EnchantedBookLootModifier(LootItemCondition[] conditions) {
         super(conditions);
-    }
-
-    public static void register(IEventBus modEventBus) {
-        DeferredRegister<MapCodec<? extends IGlobalLootModifier>> serializers =
-                DeferredRegister.create(NeoForgeRegistries.Keys.GLOBAL_LOOT_MODIFIER_SERIALIZERS, RandomEnchantedBook.MODID);
-        serializers.register("replace_enchanted_books", () -> CODEC);
-        serializers.register(modEventBus);
     }
 
     public static void invalidateMatches() {

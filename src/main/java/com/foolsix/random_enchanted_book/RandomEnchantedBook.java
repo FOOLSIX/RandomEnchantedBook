@@ -3,6 +3,7 @@ package com.foolsix.random_enchanted_book;
 import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
 import com.foolsix.random_enchanted_book.item.ModItemReg;
 import com.foolsix.random_enchanted_book.loot.EnchantedBookLootModifier;
+import com.foolsix.random_enchanted_book.loot.ModLootModifiers;
 import com.foolsix.random_enchanted_book.network.BookPoolSync;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -17,7 +18,7 @@ public class RandomEnchantedBook {
 
     public RandomEnchantedBook(IEventBus modEventBus, ModContainer modContainer) {
         ModItemReg.register(modEventBus);
-        EnchantedBookLootModifier.register(modEventBus);
+        ModLootModifiers.register(modEventBus);
         modEventBus.addListener(RandomEnchantedBook::onConfigChanged);
         modEventBus.addListener(BookPoolSync::registerPayloads);
         NeoForge.EVENT_BUS.addListener(EnchantedBookLootModifier::onTagsUpdated);

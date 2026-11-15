@@ -1,6 +1,7 @@
 {
   "replace": false,
   "entries": [
-    "random_enchanted_book:replace_enchanted_books"
+    "random_enchanted_book:replace_enchanted_books",
+    "random_enchanted_book:add_chest_book"
   ]
 }
