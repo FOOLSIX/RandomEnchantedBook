@@ -5,5 +5,7 @@
   "item.random_enchanted_book.random_enchanted_book_epic": "Epic Enchanted Book",
   "itemGroup.random_enchanted_book.random_enchanted_books": "Random Enchanted Books",
   "jei.random_enchanted_book.possible_enchantments": "Possible Enchantments",
-  "message.random_enchanted_book.empty_pool": "No enchantments match this book's configured pool."
+  "message.random_enchanted_book.empty_pool": "No enchantments match pool %s.",
+  "message.random_enchanted_book.missing_pool": "Enchantment pool %s does not exist. Check the pool ID and datapack, then reopen the world.",
+  "tooltip.random_enchanted_book.pool": "Enchantment pool: %s"
 }

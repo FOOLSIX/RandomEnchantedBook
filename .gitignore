@@ -26,3 +26,4 @@ example/
 forge*changelog.txt
 logs/
 .codex
+src/generated/resources/.cache/

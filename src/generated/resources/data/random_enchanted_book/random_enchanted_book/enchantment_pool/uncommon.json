@@ -1,0 +1,12 @@
+{
+  "color": "#F7DD30",
+  "excluded_tags": [
+    "#minecraft:curse"
+  ],
+  "required_tags": [
+    "#minecraft:on_random_loot"
+  ],
+  "weights": [
+    5
+  ]
+}

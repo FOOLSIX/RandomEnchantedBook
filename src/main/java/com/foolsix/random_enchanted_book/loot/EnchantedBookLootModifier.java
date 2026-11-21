@@ -1,17 +1,15 @@
 package com.foolsix.random_enchanted_book.loot;
 
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import javax.annotation.Nullable;
 
-import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
+import com.foolsix.random_enchanted_book.config.LootConfig;
 import com.foolsix.random_enchanted_book.item.ModItemReg;
 import com.foolsix.random_enchanted_book.item.RandomEnchantedBookItem;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
@@ -21,26 +19,13 @@ import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
 import net.neoforged.neoforge.common.loot.LootModifier;
-import net.neoforged.neoforge.event.TagsUpdatedEvent;
 
 public final class EnchantedBookLootModifier extends LootModifier {
     static final MapCodec<EnchantedBookLootModifier> CODEC =
             RecordCodecBuilder.mapCodec(instance -> codecStart(instance).apply(instance, EnchantedBookLootModifier::new));
-    private static volatile ConcurrentMap<Holder.Reference<Enchantment>, Optional<RandomEnchantedBookItem>> matches =
-            new ConcurrentHashMap<>();
 
     private EnchantedBookLootModifier(LootItemCondition[] conditions) {
         super(conditions);
-    }
-
-    public static void invalidateMatches() {
-        matches = new ConcurrentHashMap<>();
-    }
-
-    public static void onTagsUpdated(TagsUpdatedEvent event) {
-        if (event.getUpdateCause() == TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD) {
-            invalidateMatches();
-        }
     }
 
     @Override
@@ -50,7 +35,7 @@ public final class EnchantedBookLootModifier extends LootModifier {
 
     @Override
     protected ObjectArrayList<ItemStack> doApply(ObjectArrayList<ItemStack> loot, LootContext context) {
-        double chance = EnchantmentPoolConfig.lootReplacementChance();
+        double chance = LootConfig.replacementChance();
         if (chance <= 0.0) {
             return loot;
         }
@@ -61,7 +46,7 @@ public final class EnchantedBookLootModifier extends LootModifier {
         int kept = 0;
         for (int index = 0; index < originalSize; index++) {
             ItemStack original = loot.get(index);
-            ItemStack remaining = replaceBook(original, chance, random, loot);
+            ItemStack remaining = replaceBook(original, chance, random, loot, context.getLevel().registryAccess());
             if (remaining == ItemStack.EMPTY && remaining != original) {
                 continue;
             }
@@ -77,7 +62,7 @@ public final class EnchantedBookLootModifier extends LootModifier {
     }
 
     private static ItemStack replaceBook(ItemStack original, double chance, RandomSource random,
-                                         ObjectArrayList<ItemStack> loot) {
+                                         ObjectArrayList<ItemStack> loot, RegistryAccess registries) {
         if (!original.is(Items.ENCHANTED_BOOK) || original.isEmpty()) {
             return original;
         }
@@ -91,20 +76,17 @@ public final class EnchantedBookLootModifier extends LootModifier {
             return original;
         }
 
-        ItemEnchantments.Mutable unmatched = replaceMatchingEnchantments(stored, selected, loot);
+        ItemEnchantments.Mutable unmatched = replaceMatchingEnchantments(stored, selected, loot, registries);
         return unmatched == null ? original : keepRemainingBooks(original, selected, unmatched, loot);
     }
 
     @Nullable
     private static ItemEnchantments.Mutable replaceMatchingEnchantments(ItemEnchantments stored, int selected,
-                                                                         ObjectArrayList<ItemStack> loot) {
-        var matchingBooks = matches;
+                                                                         ObjectArrayList<ItemStack> loot,
+                                                                         RegistryAccess registries) {
         ItemEnchantments.Mutable unmatched = null;
         for (Holder<Enchantment> enchantment : stored.keySet()) {
-            if (!(enchantment instanceof Holder.Reference<Enchantment> reference)) {
-                continue;
-            }
-            var book = matchingBooks.computeIfAbsent(reference, EnchantedBookLootModifier::findMatchingBook).orElse(null);
+            var book = findMatchingBook(registries, enchantment);
             if (book == null) {
                 continue;
             }
@@ -153,13 +135,14 @@ public final class EnchantedBookLootModifier extends LootModifier {
         return selected;
     }
 
-    private static Optional<RandomEnchantedBookItem> findMatchingBook(Holder.Reference<Enchantment> enchantment) {
+    @Nullable
+    private static RandomEnchantedBookItem findMatchingBook(RegistryAccess registries, Holder<Enchantment> enchantment) {
         for (var book : ModItemReg.BOOKS) {
             RandomEnchantedBookItem item = book.get();
-            if (item.matchesEnchantment(enchantment)) {
-                return Optional.of(item);
+            if (item.matchesEnchantment(registries, enchantment)) {
+                return item;
             }
         }
-        return Optional.empty();
+        return null;
     }
 }

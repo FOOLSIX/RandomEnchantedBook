@@ -1,6 +1,6 @@
 package com.foolsix.random_enchanted_book.loot;
 
-import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
+import com.foolsix.random_enchanted_book.config.LootConfig;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -30,7 +30,7 @@ final class ChestBookLootModifier extends LootModifier {
 
     @Override
     protected ObjectArrayList<ItemStack> doApply(ObjectArrayList<ItemStack> loot, LootContext context) {
-        var settings = EnchantmentPoolConfig.CHEST_BOOKS.settings();
+        var settings = LootConfig.CHEST_BOOKS.settings();
         if (settings.chance() <= 0.0 || !isChestLoot(context)) {
             return loot;
         }

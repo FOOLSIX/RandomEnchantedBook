@@ -3,7 +3,7 @@ package com.foolsix.random_enchanted_book.item;
 import java.util.List;
 
 import com.foolsix.random_enchanted_book.RandomEnchantedBook;
-import com.foolsix.random_enchanted_book.config.EnchantmentPoolConfig;
+import com.foolsix.random_enchanted_book.data.BookPools;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
@@ -19,16 +19,16 @@ public final class ModItemReg {
 
     public static final DeferredItem<RandomEnchantedBookItem> COMMON_BOOK =
             ITEMS.register("random_enchanted_book_common",
-                    () -> new RandomEnchantedBookItem(Rarity.COMMON, EnchantmentPoolConfig.COMMON));
+                    () -> new RandomEnchantedBookItem(Rarity.COMMON, BookPools.COMMON));
     public static final DeferredItem<RandomEnchantedBookItem> UNCOMMON_BOOK =
             ITEMS.register("random_enchanted_book_uncommon",
-                    () -> new RandomEnchantedBookItem(Rarity.UNCOMMON, EnchantmentPoolConfig.UNCOMMON));
+                    () -> new RandomEnchantedBookItem(Rarity.UNCOMMON, BookPools.UNCOMMON));
     public static final DeferredItem<RandomEnchantedBookItem> RARE_BOOK =
             ITEMS.register("random_enchanted_book_rare",
-                    () -> new RandomEnchantedBookItem(Rarity.RARE, EnchantmentPoolConfig.RARE));
+                    () -> new RandomEnchantedBookItem(Rarity.RARE, BookPools.RARE));
     public static final DeferredItem<RandomEnchantedBookItem> EPIC_BOOK =
             ITEMS.register("random_enchanted_book_epic",
-                    () -> new RandomEnchantedBookItem(Rarity.EPIC, EnchantmentPoolConfig.EPIC));
+                    () -> new RandomEnchantedBookItem(Rarity.EPIC, BookPools.EPIC));
 
     public static final List<DeferredItem<RandomEnchantedBookItem>> BOOKS =
             List.of(COMMON_BOOK, UNCOMMON_BOOK, RARE_BOOK, EPIC_BOOK);

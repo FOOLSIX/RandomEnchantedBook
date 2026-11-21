@@ -3,6 +3,7 @@ package com.foolsix.random_enchanted_book.compat.jei;
 import java.util.List;
 
 import com.foolsix.random_enchanted_book.item.ModItemReg;
+import com.foolsix.random_enchanted_book.item.RandomEnchantedBookItem;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.drawable.IScalableDrawable;
@@ -18,7 +19,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 
 import static com.foolsix.random_enchanted_book.RandomEnchantedBook.MODID;
@@ -84,14 +85,19 @@ final class EnchantmentPoolJeiCategory implements IRecipeCategory<EnchantmentPoo
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, EnchantmentPoolJeiRecipe recipe, IFocusGroup focuses) {
-        List<Item> books = switch (recipe) {
+        List<ItemStack> books = switch (recipe) {
             case EnchantmentPoolJeiRecipe.Pool pool -> List.of(pool.input());
             case EnchantmentPoolJeiRecipe.Sources sources -> sources.books();
         };
-        int rowWidth = books.size() * ITEM_SIZE + (books.size() - 1) * ITEM_GAP;
+        // Keep the header within bounds even when a pack defines many custom pools.
+        int slots = Math.min(books.size(), 4);
+        int rowWidth = slots * ITEM_SIZE + (slots - 1) * ITEM_GAP;
         int x = (WIDTH - rowWidth) / 2;
-        for (Item book : books) {
-            builder.addInputSlot(x, ITEM_Y).addItemStack(book.getDefaultInstance());
+        for (int i = 0; i < slots; i++) {
+            var slot = builder.addInputSlot(x, ITEM_Y);
+            for (int j = i; j < books.size(); j += slots) {
+                slot.addItemStack(books.get(j));
+            }
             x += ITEM_SIZE + ITEM_GAP;
         }
     }
@@ -99,9 +105,12 @@ final class EnchantmentPoolJeiCategory implements IRecipeCategory<EnchantmentPoo
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, EnchantmentPoolJeiRecipe recipe, IFocusGroup focuses) {
         List<FormattedText> rows = switch (recipe) {
-            case EnchantmentPoolJeiRecipe.Pool pool -> pool.enchantments().isEmpty()
-                    ? List.of(Component.translatable("message." + MODID + ".empty_pool"))
-                    : pool.enchantments().stream().<FormattedText>map(enchantment -> formatRow(enchantment.value())).toList();
+            case EnchantmentPoolJeiRecipe.Pool pool -> pool.error().isPresent()
+                    ? List.of(pool.error().get())
+                    : pool.enchantments().isEmpty()
+                            ? List.of(Component.translatable("message." + MODID + ".empty_pool",
+                                    ((RandomEnchantedBookItem) pool.input().getItem()).getPoolId(pool.input()).toString()))
+                            : pool.enchantments().stream().<FormattedText>map(enchantment -> formatRow(enchantment.value())).toList();
             case EnchantmentPoolJeiRecipe.Sources sources -> List.of(
                     sources.enchantment().value().description().copy().append(" ").append(formatLevel(sources.level())));
         };

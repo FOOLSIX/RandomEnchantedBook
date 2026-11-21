@@ -1,0 +1,11 @@
+{
+  "excluded_tags": [
+    "#minecraft:curse"
+  ],
+  "required_tags": [
+    "#minecraft:on_random_loot"
+  ],
+  "weights": [
+    10
+  ]
+}
