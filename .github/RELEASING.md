@@ -5,8 +5,8 @@
 每次发布：
 
 1. 修改 `gradle.properties` 的 `mod_version`，并同步更新 `CHANGELOG.md` 顶部的版本号和更新内容。
-2. 提交并推送到 `main`，**Publish to CurseForge** 会在检测到版本号变化后自动构建、校验并上传，发布类型为 `release`。等待工作流成功及 CurseForge 审核通过即可。
+2. 提交并推送到 `main`，**Build and Publish to CurseForge** 会先检查版本号，只有变化时才构建一次、校验并上传，发布类型为 `release`。等待工作流成功及 CurseForge 审核通过即可。
 
-版本号未变的推送只做构建检查，无需创建标签或 GitHub Release。
+未修改 `gradle.properties` 的推送不触发工作流；修改了该文件但 `mod_version` 未变时，只运行轻量版本检查，跳过 Java、Gradle、构建及发布。PR 不自动触发。无需创建标签或 GitHub Release。
 
-手动试运行或补发：进入 **Actions → Publish to CurseForge → Run workflow**，填写要构建的 `ref`（分支、标签或提交），选择发布类型；勾选 `publish` 才会上传，否则仅构建校验。补发前确认该版本尚未上传。
+手动试运行或补发：进入 **Actions → Build and Publish to CurseForge → Run workflow**，填写要构建的 `ref`（分支、标签或提交），选择发布类型；勾选 `publish` 才会上传，否则仅构建校验。手动运行跳过版本变化判断，补发前确认该版本尚未上传。

@@ -1,4 +1,4 @@
-name: Publish to CurseForge
+name: Build and Publish to CurseForge
 
 on:
   push:
@@ -28,6 +28,7 @@ permissions:
 
 jobs:
   detect:
+    name: Check version
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -45,6 +46,7 @@ jobs:
         run: python3 -B .github/scripts/release_metadata.py --detect-version-change
 
   release:
+    name: Build and publish
     needs: detect
     if: needs.detect.outputs.publish == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
